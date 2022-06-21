@@ -1,11 +1,13 @@
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_sqlalchemy import SQLAlchemy
 import dotenv
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists, create_database
 from marshmallow import Schema, fields
+from apifairy import APIFairy, response
+from flask_marshmallow import Marshmallow
 
 
 dotenv.load_dotenv()
@@ -26,7 +28,23 @@ engine = create_engine(DB_URI, echo=True)
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['APIFAIRY_TITLE'] = 'Docs created with APIFairy'
+app.config['APIFAIRY_VERSION'] = '0.9.1'
 db = SQLAlchemy(app)
+ma = Marshmallow(app)
+apifairy = APIFairy(app)
+
+
+class UserSchema(ma.Schema):
+    id = ma.Int()
+    name = ma.Str()
+    email = ma.Str()
+    age = ma.Int()
+    cellphone = ma.Str()
+
+
+class HealthCheck(ma.Schema):
+    pass
 
 
 class Student(db.Model):
@@ -69,27 +87,46 @@ def home():
 
 @app.route('/api', methods=['GET'])
 def api_main():
-    return jsonify('Hello, World!'), 200
+    """
+    /api
+    Returns link to documentation.
+    """
+    return '<h1><p  style=text-align:center; width:100%><a href=/docs>Read the docs</a></p></h1>'
 
 
 @app.route('/api/students', methods=['GET'])
+@response(UserSchema)
 def get_all_students():
+    """
+    /api/students
+    Get list of students.
+    """
     students = Student.get_all()
     student_list = StudentSchema(many=True)
-    response = student_list.dump(students)
-    return jsonify(response), 200
+    response_to_client = student_list.dump(students)
+    return jsonify(response_to_client), 200
 
 
 @app.route('/api/students/get/<int:id>', methods=['GET'])
+@response(UserSchema)
 def get_student(id):
+    """
+    /api/students/get/{id}
+    Get students data.
+    """
     student_info = Student.get_by_id(id)
     serializer = StudentSchema()
-    response = serializer.dump(student_info)
-    return jsonify(response), 200
+    response_to_client = serializer.dump(student_info)
+    return jsonify(response_to_client), 200
 
 
 @app.route('/api/students/add', methods=['POST'])
+@response(UserSchema, 201)
 def add_student():
+    """
+    /api/students/add
+    Add new student to DB.
+    """
     json_data = request.get_json()
     new_student = Student(
         name=json_data.get('name'),
@@ -101,6 +138,84 @@ def add_student():
     serializer = StudentSchema()
     data = serializer.dump(new_student)
     return jsonify(data), 201
+
+
+@app.route('/api/students/modify/<int:id>', methods=['PATCH'])
+@response(UserSchema)
+def modify_fields(id):
+    """
+    /api/students/modify/{id}
+    Modify students data.
+    """
+    json_data = request.get_json()
+    cur_student = Student.get_by_id(id)
+    if json_data.get('name'):
+        cur_student.name = json_data.get('name')
+    if json_data.get('email'):
+        cur_student.email = json_data.get('email')
+    if json_data.get('age'):
+        cur_student.age = json_data.get('age')
+    if json_data.get('cellphone'):
+        cur_student.age = json_data.get('cellphone')
+    cur_student.save()
+    serializer = StudentSchema()
+    data = serializer.dump(cur_student)
+    return jsonify(data), 200
+
+
+@app.route('/api/students/change/<int:id>', methods=['PUT'])
+@response(UserSchema)
+def modify_all_fields(id):
+    """
+    /api/students/change/{id}
+    Change student data.
+    """
+    json_data = request.get_json()
+    cur_student = Student.get_by_id(id)
+    if json_data.get('name'):
+        cur_student.name = json_data.get('name')
+    if json_data.get('email'):
+        cur_student.email = json_data.get('email')
+    if json_data.get('age'):
+        cur_student.age = json_data.get("age")
+    if json_data.get('cellphone'):
+        cur_student.age = json_data.get('cellphone')
+    cur_student.save()
+    serializer = StudentSchema()
+    data = serializer.dump(cur_student)
+    return jsonify(data), 200
+
+
+@app.route('/api/students/remove/<int:id>', methods=['DELETE'])
+@response(UserSchema)
+def remove_student(id):
+    """
+    /api/students/remove/{id}
+    Remove student from database.
+    """
+    guide = Student.query.get(id)
+    db.session.delete(guide)
+    db.session.commit()
+    return "Record deleted."
+
+
+@app.route('/api/health-check/ok', methods=['GET'])
+@response(HealthCheck)
+def health_ok():
+    """/api/health-check/ok
+    The health check endpoint enables the health of a service instance to be periodically tested.
+    """
+    return Response("{'some':'json'}", status=200, mimetype='application/json')
+
+
+@app.route('/api/health-check/bad', methods=['GET'])
+@response(HealthCheck, 500)
+def health_bad():
+    """
+    /api/health-check/bad
+    The health check endpoint enables the health of a service instance to be periodically tested.
+    """
+    return Response("{'some':'json'}", status=500, mimetype='application/json')
 
 
 if __name__ == '__main__':

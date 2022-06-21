@@ -2,8 +2,8 @@ Flask-SQLAlchemy
 Flask
 pymysql
 python-dotenv
-sqlalchemy_utils
 sqlalchemy
-marshmallow
+sqlalchemy_utils
 marshmallow-sqlalchemy
 cryptography
+apifairy
